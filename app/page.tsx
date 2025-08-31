@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { BookOpen, Play, Clock, User, LogIn, UserPlus, Search, X } from "lucide-react"
 import { AuthModal } from "@/components/auth/auth-modal"
+import { ProfileDropdown } from "@/components/profile/profile-dropdown"
+import { useAuth } from "@/hooks/use-auth"
 
 const courses = [
   {
@@ -45,6 +47,7 @@ const courses = [
 ]
 
 export default function HomePage() {
+  const { user, loading } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [showSuggestions, setShowSuggestions] = useState(false)
 
@@ -91,18 +94,26 @@ export default function HomePage() {
               <span className="text-xl font-bold text-gray-900">LearnHub</span>
             </div>
             <div className="flex items-center space-x-4">
-              <AuthModal>
-                <Button variant="ghost" size="sm">
-                  <LogIn className="h-4 w-4 mr-2" />
-                  Đăng nhập
-                </Button>
-              </AuthModal>
-              <AuthModal defaultTab="register">
-                <Button size="sm">
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Đăng ký
-                </Button>
-              </AuthModal>
+              {loading ? (
+                <div className="h-10 w-10 bg-gray-200 rounded-full animate-pulse" />
+              ) : user ? (
+                <ProfileDropdown />
+              ) : (
+                <>
+                  <AuthModal>
+                    <Button variant="ghost" size="sm">
+                      <LogIn className="h-4 w-4 mr-2" />
+                      Đăng nhập
+                    </Button>
+                  </AuthModal>
+                  <AuthModal defaultTab="register">
+                    <Button size="sm">
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Đăng ký
+                    </Button>
+                  </AuthModal>
+                </>
+              )}
             </div>
           </div>
         </div>
