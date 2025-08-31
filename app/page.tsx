@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -10,48 +10,59 @@ import { AuthModal } from "@/components/auth/auth-modal"
 import { ProfileDropdown } from "@/components/profile/profile-dropdown"
 import { useAuth } from "@/hooks/use-auth"
 
-const courses = [
-  {
-    id: 1,
-    title: "HTML & CSS Cơ bản",
-    description: "Học nền tảng của web development với HTML và CSS",
-    duration: "8 giờ",
-    lessons: "15 bài học",
-    type: "Miễn phí",
-    slug: "html-css-basics",
-    gradient: "from-blue-500 to-purple-600",
-    keywords: ["html", "css", "cơ bản", "web", "frontend"],
-  },
-  {
-    id: 2,
-    title: "JavaScript Nâng cao",
-    description: "Nắm vững JavaScript ES6+ và các concept quan trọng",
-    duration: "12 giờ",
-    lessons: "20 bài học",
-    type: "Premium",
-    slug: "javascript-advanced",
-    gradient: "from-green-500 to-teal-600",
-    keywords: ["javascript", "js", "nâng cao", "es6", "programming"],
-  },
-  {
-    id: 3,
-    title: "React & Next.js",
-    description: "Xây dựng ứng dụng web hiện đại với React và Next.js",
-    duration: "16 giờ",
-    lessons: "25 bài học",
-    type: "Premium",
-    slug: "react-nextjs",
-    gradient: "from-purple-500 to-pink-600",
-    keywords: ["react", "nextjs", "next.js", "framework", "modern"],
-  },
-]
+interface Course {
+  id: string
+  title: string
+  description: string
+  slug: string
+  level: string
+  duration_minutes: number
+  price: number
+  is_published: boolean
+  thumbnail_url?: string
+  lessons?: { id: string }[]
+}
 
 export default function HomePage() {
-  const { user, loading } = useAuth()
+  const { user, loading, supabase } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [courses, setCourses] = useState<Course[]>([])
+  const [coursesLoading, setCoursesLoading] = useState(true)
 
-  // Filter courses based on search term
+  useEffect(() => {
+    const loadCourses = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("courses")
+          .select(`
+            id,
+            title,
+            description,
+            slug,
+            level,
+            duration_minutes,
+            price,
+            is_published,
+            thumbnail_url,
+            lessons (id)
+          `)
+          .eq("is_published", true)
+          .order("created_at", { ascending: false })
+
+        if (error) throw error
+
+        setCourses(data || [])
+      } catch (error) {
+        console.error("Error loading courses:", error)
+      } finally {
+        setCoursesLoading(false)
+      }
+    }
+
+    loadCourses()
+  }, [supabase])
+
   const filteredCourses = useMemo(() => {
     if (!searchTerm.trim()) return courses
 
@@ -59,29 +70,70 @@ export default function HomePage() {
       (course) =>
         course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         course.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        course.keywords.some((keyword) => keyword.toLowerCase().includes(searchTerm.toLowerCase())),
+        course.level.toLowerCase().includes(searchTerm.toLowerCase()),
     )
-  }, [searchTerm])
+  }, [searchTerm, courses])
 
-  // Get suggestions based on search term
   const suggestions = useMemo(() => {
     if (!searchTerm.trim()) return []
 
-    const allKeywords = courses.flatMap((course) => course.keywords)
-    const uniqueKeywords = [...new Set(allKeywords)]
+    const keywords = [
+      ...courses.map((c) => c.title.toLowerCase()),
+      ...courses.map((c) => c.level.toLowerCase()),
+      "javascript",
+      "react",
+      "html",
+      "css",
+      "cơ bản",
+      "nâng cao",
+    ]
+
+    const uniqueKeywords = [...new Set(keywords)]
 
     return uniqueKeywords
-      .filter(
-        (keyword) =>
-          keyword.toLowerCase().includes(searchTerm.toLowerCase()) &&
-          keyword.toLowerCase() !== searchTerm.toLowerCase(),
-      )
+      .filter((keyword) => keyword.includes(searchTerm.toLowerCase()) && keyword !== searchTerm.toLowerCase())
       .slice(0, 5)
-  }, [searchTerm])
+  }, [searchTerm, courses])
 
   const clearSearch = () => {
     setSearchTerm("")
     setShowSuggestions(false)
+  }
+
+  const getCourseGradient = (level: string) => {
+    switch (level.toLowerCase()) {
+      case "beginner":
+        return "from-green-500 to-teal-600"
+      case "intermediate":
+        return "from-blue-500 to-purple-600"
+      case "advanced":
+        return "from-purple-500 to-pink-600"
+      default:
+        return "from-gray-500 to-gray-600"
+    }
+  }
+
+  const formatDuration = (minutes: number) => {
+    const hours = Math.floor(minutes / 60)
+    const remainingMinutes = minutes % 60
+
+    if (hours > 0) {
+      return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`
+    }
+    return `${minutes}m`
+  }
+
+  const getLevelText = (level: string) => {
+    switch (level.toLowerCase()) {
+      case "beginner":
+        return "Cơ bản"
+      case "intermediate":
+        return "Trung bình"
+      case "advanced":
+        return "Nâng cao"
+      default:
+        return level
+    }
   }
 
   return (
@@ -153,7 +205,6 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Suggestions dropdown */}
             {showSuggestions && suggestions.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-10 animate-fade-in">
                 <div className="p-2">
@@ -190,56 +241,78 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredCourses.length > 0 ? (
-              filteredCourses.map((course, index) => (
-                <Card
-                  key={course.id}
-                  className="hover:shadow-lg transition-all duration-300 hover:-translate-y-1 animate-slide-up"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  <div
-                    className={`aspect-video bg-gradient-to-br ${course.gradient} rounded-t-lg flex items-center justify-center`}
-                  >
-                    <Play className="h-12 w-12 text-white" />
-                  </div>
+          {coursesLoading ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map((i) => (
+                <Card key={i} className="animate-pulse">
+                  <div className="aspect-video bg-gray-200 rounded-t-lg"></div>
                   <CardHeader>
-                    <div className="flex items-center justify-between mb-2">
-                      <Badge variant={course.type === "Miễn phí" ? "secondary" : "default"}>{course.type}</Badge>
-                    </div>
-                    <CardTitle className="text-lg">{course.title}</CardTitle>
-                    <CardDescription>{course.description}</CardDescription>
+                    <div className="h-4 bg-gray-200 rounded mb-2"></div>
+                    <div className="h-6 bg-gray-200 rounded mb-2"></div>
+                    <div className="h-4 bg-gray-200 rounded"></div>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                      <div className="flex items-center">
-                        <Clock className="h-4 w-4 mr-1" />
-                        {course.duration}
-                      </div>
-                      <div className="flex items-center">
-                        <User className="h-4 w-4 mr-1" />
-                        {course.lessons}
-                      </div>
-                    </div>
-                    <Button className="w-full" asChild>
-                      <a href={`/learn/${course.slug}`}>Học ngay</a>
-                    </Button>
+                    <div className="h-4 bg-gray-200 rounded mb-4"></div>
+                    <div className="h-10 bg-gray-200 rounded"></div>
                   </CardContent>
                 </Card>
-              ))
-            ) : (
-              <div className="col-span-full text-center py-12">
-                <div className="text-gray-400 mb-4">
-                  <Search className="h-16 w-16 mx-auto mb-4" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredCourses.length > 0 ? (
+                filteredCourses.map((course, index) => (
+                  <Card
+                    key={course.id}
+                    className="hover:shadow-lg transition-all duration-300 hover:-translate-y-1 animate-slide-up"
+                    style={{ animationDelay: `${index * 100}ms` }}
+                  >
+                    <div
+                      className={`aspect-video bg-gradient-to-br ${getCourseGradient(course.level)} rounded-t-lg flex items-center justify-center`}
+                    >
+                      <Play className="h-12 w-12 text-white" />
+                    </div>
+                    <CardHeader>
+                      <div className="flex items-center justify-between mb-2">
+                        <Badge variant={course.price === 0 ? "secondary" : "default"}>
+                          {course.price === 0 ? "Miễn phí" : "Premium"}
+                        </Badge>
+                        <Badge variant="outline">{getLevelText(course.level)}</Badge>
+                      </div>
+                      <CardTitle className="text-lg">{course.title}</CardTitle>
+                      <CardDescription>{course.description}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
+                        <div className="flex items-center">
+                          <Clock className="h-4 w-4 mr-1" />
+                          {formatDuration(course.duration_minutes)}
+                        </div>
+                        <div className="flex items-center">
+                          <User className="h-4 w-4 mr-1" />
+                          {course.lessons?.length || 0} bài học
+                        </div>
+                      </div>
+                      <Button className="w-full" asChild>
+                        <a href={`/learn/${course.slug}`}>Học ngay</a>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                <div className="col-span-full text-center py-12">
+                  <div className="text-gray-400 mb-4">
+                    <Search className="h-16 w-16 mx-auto mb-4" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Không tìm thấy khóa học</h3>
+                  <p className="text-gray-500 mb-4">Thử tìm kiếm với từ khóa khác</p>
+                  <Button onClick={clearSearch} variant="outline">
+                    Xem tất cả khóa học
+                  </Button>
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Không tìm thấy khóa học</h3>
-                <p className="text-gray-500 mb-4">Thử tìm kiếm với từ khóa khác</p>
-                <Button onClick={clearSearch} variant="outline">
-                  Xem tất cả khóa học
-                </Button>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       </section>
 

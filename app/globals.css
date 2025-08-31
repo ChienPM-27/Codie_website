@@ -1,7 +1,5 @@
 @import "tailwindcss";
-
-/* Removed problematic tw-animate-css import and fixed custom-variant syntax */
-@variant dark (.dark &);
+@import "tw-animate-css";
 
 :root {
   --background: oklch(1 0 0);
@@ -75,8 +73,6 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -122,49 +118,6 @@
   body {
     @apply bg-background text-foreground;
   }
-}
-
-/* Added smooth animations */
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in {
-  animation: fade-in 0.6s ease-out;
-}
-
-.animate-fade-in-delay {
-  animation: fade-in 0.6s ease-out 0.2s both;
-}
-
-.animate-slide-up {
-  animation: slide-up 0.5s ease-out;
-}
-
-.animate-slide-up-delay {
-  animation: slide-up 0.5s ease-out 0.1s both;
-}
-
-.animate-slide-up-delay-2 {
-  animation: slide-up 0.5s ease-out 0.2s both;
 }
 
 /* Smooth transitions for interactive elements */

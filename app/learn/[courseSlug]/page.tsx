@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { RotateCcw, List, Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
@@ -10,51 +10,184 @@ import { ChapterSidebar } from "@/components/learning/chapter-sidebar"
 import { ChapterContent } from "@/components/learning/chapter-content"
 import { ChapterSelectorModal } from "@/components/learning/chapter-selector-modal"
 import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer"
+import { useAuth } from "@/hooks/use-auth"
+import { toast } from "sonner"
 
-// Mock data - replace with real data from Supabase
-const mockCourse = {
-  title: "Học lập trình C++ từ cơ bản đến nâng cao",
-  chapters: [
-    { id: 1, title: "Giới thiệu về C++", status: "completed" as const },
-    { id: 2, title: "Biến và kiểu dữ liệu", status: "completed" as const },
-    { id: 3, title: "Cấu trúc điều khiển", status: "current" as const },
-    { id: 4, title: "Hàm và thủ tục", status: "locked" as const },
-    { id: 5, title: "Mảng và con trỏ", status: "locked" as const },
-    { id: 6, title: "Lập trình hướng đối tượng", status: "locked" as const },
-    { id: 7, title: "Template và STL", status: "locked" as const },
-    { id: 8, title: "Xử lý ngoại lệ", status: "locked" as const },
-  ],
+interface Lesson {
+  id: string
+  title: string
+  slug: string
+  content_mdx: string
+  order_index: number
+  duration_minutes: number
+  is_free: boolean
+}
+
+interface Course {
+  id: string
+  title: string
+  slug: string
+  description: string
+  lessons: Lesson[]
 }
 
 export default function LearnCoursePage({ params }: { params: { courseSlug: string } }) {
-  const [currentChapter, setCurrentChapter] = useState(3)
+  const [course, setCourse] = useState<Course | null>(null)
+  const [currentLessonIndex, setCurrentLessonIndex] = useState(0)
+  const [completedLessons, setCompletedLessons] = useState<string[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
   const { theme, setTheme } = useTheme()
+  const { user, supabase } = useAuth()
 
-  const completedChapters = mockCourse.chapters.filter((ch) => ch.status === "completed").length
-  const progress = (completedChapters / mockCourse.chapters.length) * 100
+  useEffect(() => {
+    const loadCourseData = async () => {
+      try {
+        // Fetch course with lessons
+        const { data: courseData, error: courseError } = await supabase
+          .from("courses")
+          .select(`
+            id,
+            title,
+            slug,
+            description,
+            lessons (
+              id,
+              title,
+              slug,
+              content_mdx,
+              order_index,
+              duration_minutes,
+              is_free
+            )
+          `)
+          .eq("slug", params.courseSlug)
+          .single()
+
+        if (courseError) throw courseError
+
+        if (courseData) {
+          // Sort lessons by order_index
+          courseData.lessons.sort((a: Lesson, b: Lesson) => a.order_index - b.order_index)
+          setCourse(courseData as Course)
+
+          // Load user progress if logged in
+          if (user) {
+            const { data: progressData } = await supabase
+              .from("lesson_progress")
+              .select("lesson_id")
+              .eq("user_id", user.id)
+              .in(
+                "lesson_id",
+                courseData.lessons.map((l: Lesson) => l.id),
+              )
+
+            const completed = progressData?.map((p) => p.lesson_id) || []
+            setCompletedLessons(completed)
+
+            // Find first incomplete lesson or start from beginning
+            const firstIncompleteIndex = courseData.lessons.findIndex(
+              (lesson: Lesson) => !completed.includes(lesson.id),
+            )
+            setCurrentLessonIndex(firstIncompleteIndex >= 0 ? firstIncompleteIndex : 0)
+          }
+        }
+      } catch (error) {
+        console.error("Error loading course:", error)
+        toast.error("Không thể tải khóa học")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadCourseData()
+  }, [params.courseSlug, user, supabase])
+
+  const markLessonCompleted = async (lessonId: string) => {
+    if (!user || !course) return
+
+    try {
+      const response = await fetch("/api/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lessonId,
+          courseId: course.id,
+        }),
+      })
+
+      if (response.ok) {
+        setCompletedLessons((prev) => [...prev, lessonId])
+        toast.success("Đã hoàn thành bài học!")
+      }
+    } catch (error) {
+      console.error("Error marking lesson completed:", error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p>Đang tải khóa học...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!course) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Không tìm thấy khóa học</h1>
+          <Button onClick={() => window.history.back()}>Quay lại</Button>
+        </div>
+      </div>
+    )
+  }
+
+  const currentLesson = course.lessons[currentLessonIndex]
+  const progress = (completedLessons.length / course.lessons.length) * 100
+
+  const chapters = course.lessons.map((lesson, index) => ({
+    id: index + 1,
+    title: lesson.title,
+    status: completedLessons.includes(lesson.id)
+      ? ("completed" as const)
+      : index === currentLessonIndex
+        ? ("current" as const)
+        : ("locked" as const),
+  }))
 
   const handleChapterSelect = (chapterId: number) => {
-    setCurrentChapter(chapterId)
-    setIsModalOpen(false)
-    setIsMobileDrawerOpen(false)
+    const lessonIndex = chapterId - 1
+    if (lessonIndex >= 0 && lessonIndex < course.lessons.length) {
+      setCurrentLessonIndex(lessonIndex)
+      setIsModalOpen(false)
+      setIsMobileDrawerOpen(false)
+    }
   }
 
   const handleNext = () => {
-    if (currentChapter < mockCourse.chapters.length) {
-      setCurrentChapter(currentChapter + 1)
+    if (currentLessonIndex < course.lessons.length - 1) {
+      // Mark current lesson as completed when moving to next
+      if (user && !completedLessons.includes(currentLesson.id)) {
+        markLessonCompleted(currentLesson.id)
+      }
+      setCurrentLessonIndex(currentLessonIndex + 1)
     }
   }
 
   const handlePrevious = () => {
-    if (currentChapter > 1) {
-      setCurrentChapter(currentChapter - 1)
+    if (currentLessonIndex > 0) {
+      setCurrentLessonIndex(currentLessonIndex - 1)
     }
   }
 
   const handleRestart = () => {
-    setCurrentChapter(1)
+    setCurrentLessonIndex(0)
   }
 
   return (
@@ -73,8 +206,8 @@ export default function LearnCoursePage({ params }: { params: { courseSlug: stri
               <DrawerContent className="h-[80vh]">
                 <div className="p-4">
                   <ChapterSidebar
-                    chapters={mockCourse.chapters}
-                    currentChapter={currentChapter}
+                    chapters={chapters}
+                    currentChapter={currentLessonIndex + 1}
                     onChapterSelect={handleChapterSelect}
                   />
                 </div>
@@ -82,11 +215,11 @@ export default function LearnCoursePage({ params }: { params: { courseSlug: stri
             </Drawer>
 
             <div>
-              <h1 className="text-xl font-bold text-foreground">{mockCourse.title}</h1>
+              <h1 className="text-xl font-bold text-foreground">{course.title}</h1>
               <div className="flex items-center gap-4 mt-2">
                 <Progress value={progress} className="w-32" />
                 <span className="text-sm text-muted-foreground">
-                  {completedChapters}/{mockCourse.chapters.length} chương
+                  {completedLessons.length}/{course.lessons.length} bài học
                 </span>
               </div>
             </div>
@@ -99,7 +232,7 @@ export default function LearnCoursePage({ params }: { params: { courseSlug: stri
             </Button>
             <Button variant="outline" size="sm" onClick={() => setIsModalOpen(true)}>
               <List className="h-4 w-4 mr-2" />
-              Chọn chương
+              Chọn bài học
             </Button>
             <Button variant="outline" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -113,8 +246,8 @@ export default function LearnCoursePage({ params }: { params: { courseSlug: stri
         <aside className="hidden md:block w-80 border-r bg-card/30 min-h-[calc(100vh-73px)]">
           <div className="p-4">
             <ChapterSidebar
-              chapters={mockCourse.chapters}
-              currentChapter={currentChapter}
+              chapters={chapters}
+              currentChapter={currentLessonIndex + 1}
               onChapterSelect={handleChapterSelect}
             />
           </div>
@@ -124,7 +257,7 @@ export default function LearnCoursePage({ params }: { params: { courseSlug: stri
         <main className="flex-1 min-h-[calc(100vh-73px)]">
           <AnimatePresence mode="wait">
             <motion.div
-              key={currentChapter}
+              key={currentLessonIndex}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -132,11 +265,14 @@ export default function LearnCoursePage({ params }: { params: { courseSlug: stri
               className="h-full"
             >
               <ChapterContent
-                chapter={mockCourse.chapters.find((ch) => ch.id === currentChapter)!}
+                chapter={chapters[currentLessonIndex]}
+                lesson={currentLesson}
                 onNext={handleNext}
                 onPrevious={handlePrevious}
-                canGoNext={currentChapter < mockCourse.chapters.length}
-                canGoPrevious={currentChapter > 1}
+                onMarkCompleted={() => markLessonCompleted(currentLesson.id)}
+                canGoNext={currentLessonIndex < course.lessons.length - 1}
+                canGoPrevious={currentLessonIndex > 0}
+                isCompleted={completedLessons.includes(currentLesson.id)}
               />
             </motion.div>
           </AnimatePresence>
@@ -147,8 +283,8 @@ export default function LearnCoursePage({ params }: { params: { courseSlug: stri
       <ChapterSelectorModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        chapters={mockCourse.chapters}
-        currentChapter={currentChapter}
+        chapters={chapters}
+        currentChapter={currentLessonIndex + 1}
         onChapterSelect={handleChapterSelect}
       />
     </div>

@@ -1,5 +1,5 @@
 "use client"
-import { ChevronLeft, ChevronRight, BookOpen, Clock } from "lucide-react"
+import { ChevronLeft, ChevronRight, BookOpen, Clock, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -10,136 +10,65 @@ interface Chapter {
   status: "completed" | "current" | "locked"
 }
 
+interface Lesson {
+  id: string
+  title: string
+  content_mdx: string
+  duration_minutes: number
+  order_index: number
+}
+
 interface ChapterContentProps {
   chapter: Chapter
+  lesson?: Lesson
   onNext: () => void
   onPrevious: () => void
+  onMarkCompleted?: () => void
   canGoNext: boolean
   canGoPrevious: boolean
+  isCompleted?: boolean
 }
 
-export function ChapterContent({ chapter, onNext, onPrevious, canGoNext, canGoPrevious }: ChapterContentProps) {
-  // Mock content - replace with real content from database
-  const getChapterContent = (chapterId: number) => {
-    const contents: Record<number, { content: string; duration: string }> = {
-      1: {
-        content: `# Giới thiệu về C++
-
-C++ là một ngôn ngữ lập trình mạnh mẽ được phát triển bởi Bjarne Stroustrup tại Bell Labs vào năm 1979. 
-
-## Tại sao học C++?
-
-- **Hiệu suất cao**: C++ cho phép kiểm soát tài nguyên hệ thống một cách chi tiết
-- **Đa năng**: Có thể sử dụng cho game development, system programming, embedded systems
-- **Nền tảng vững chắc**: Hiểu C++ giúp học các ngôn ngữ khác dễ dàng hơn
-
-## Cài đặt môi trường
-
-1. Tải và cài đặt IDE (Visual Studio, Code::Blocks, hoặc Dev-C++)
-2. Cài đặt compiler (GCC hoặc MinGW)
-3. Kiểm tra cài đặt bằng cách compile chương trình đầu tiên
-
-\`\`\`cpp
-#include <iostream>
-using namespace std;
-
-int main() {
-    cout << "Hello, World!" << endl;
-    return 0;
-}
-\`\`\``,
-        duration: "15 phút",
-      },
-      2: {
-        content: `# Biến và kiểu dữ liệu
-
-Trong C++, biến là vùng nhớ được đặt tên để lưu trữ dữ liệu.
-
-## Các kiểu dữ liệu cơ bản
-
-### Kiểu số nguyên
-- \`int\`: số nguyên 32-bit
-- \`long\`: số nguyên 64-bit
-- \`short\`: số nguyên 16-bit
-
-### Kiểu số thực
-- \`float\`: số thực độ chính xác đơn
-- \`double\`: số thực độ chính xác kép
-
-### Kiểu ký tự
-- \`char\`: ký tự đơn
-- \`string\`: chuỗi ký tự
-
-## Khai báo biến
-
-\`\`\`cpp
-int age = 25;
-double height = 1.75;
-char grade = 'A';
-string name = "John Doe";
-\`\`\``,
-        duration: "20 phút",
-      },
-      3: {
-        content: `# Cấu trúc điều khiển
-
-Cấu trúc điều khiển cho phép chương trình thực hiện các quyết định và lặp lại các hành động.
-
-## Câu lệnh điều kiện
-
-### If-else
-\`\`\`cpp
-if (condition) {
-    // code block
-} else if (another_condition) {
-    // code block
-} else {
-    // code block
-}
-\`\`\`
-
-### Switch-case
-\`\`\`cpp
-switch (variable) {
-    case value1:
-        // code
-        break;
-    case value2:
-        // code
-        break;
-    default:
-        // default code
-}
-\`\`\`
-
-## Vòng lặp
-
-### For loop
-\`\`\`cpp
-for (int i = 0; i < 10; i++) {
-    cout << i << endl;
-}
-\`\`\`
-
-### While loop
-\`\`\`cpp
-while (condition) {
-    // code block
-}
-\`\`\``,
-        duration: "25 phút",
-      },
-    }
-
-    return (
-      contents[chapterId] || {
-        content: `# Chương ${chapterId}: ${chapter.title}\n\nNội dung đang được cập nhật...`,
-        duration: "10 phút",
-      }
-    )
+export function ChapterContent({
+  chapter,
+  lesson,
+  onNext,
+  onPrevious,
+  onMarkCompleted,
+  canGoNext,
+  canGoPrevious,
+  isCompleted = false,
+}: ChapterContentProps) {
+  const renderMarkdown = (content: string) => {
+    return content
+      .replace(
+        /```javascript\n([\s\S]*?)\n```/g,
+        '<pre class="bg-muted p-4 rounded-lg overflow-x-auto"><code class="language-javascript">$1</code></pre>',
+      )
+      .replace(
+        /```jsx\n([\s\S]*?)\n```/g,
+        '<pre class="bg-muted p-4 rounded-lg overflow-x-auto"><code class="language-jsx">$1</code></pre>',
+      )
+      .replace(
+        /```cpp\n([\s\S]*?)\n```/g,
+        '<pre class="bg-muted p-4 rounded-lg overflow-x-auto"><code class="language-cpp">$1</code></pre>',
+      )
+      .replace(
+        /```bash\n([\s\S]*?)\n```/g,
+        '<pre class="bg-muted p-4 rounded-lg overflow-x-auto"><code class="language-bash">$1</code></pre>',
+      )
+      .replace(
+        /```css\n([\s\S]*?)\n```/g,
+        '<pre class="bg-muted p-4 rounded-lg overflow-x-auto"><code class="language-css">$1</code></pre>',
+      )
+      .replace(/`([^`]+)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-sm">$1</code>')
+      .replace(/^# (.*$)/gm, '<h1 class="text-2xl font-bold mb-4">$1</h1>')
+      .replace(/^## (.*$)/gm, '<h2 class="text-xl font-semibold mb-3 mt-6">$1</h2>')
+      .replace(/^### (.*$)/gm, '<h3 class="text-lg font-medium mb-2 mt-4">$1</h3>')
+      .replace(/^\*\*(.*?)\*\*/gm, "<strong>$1</strong>")
+      .replace(/^\* (.*$)/gm, '<li class="ml-4">• $1</li>')
+      .replace(/\n\n/g, "<br><br>")
   }
-
-  const { content, duration } = getChapterContent(chapter.id)
 
   return (
     <div className="flex flex-col h-full">
@@ -148,13 +77,19 @@ while (condition) {
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <Badge variant="outline">Chương {chapter.id}</Badge>
+              <Badge variant="outline">Bài {chapter.id}</Badge>
               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                 <Clock className="h-4 w-4" />
-                {duration}
+                {lesson?.duration_minutes || 15} phút
               </div>
+              {isCompleted && (
+                <Badge variant="default" className="bg-green-600">
+                  <CheckCircle className="h-3 w-3 mr-1" />
+                  Đã hoàn thành
+                </Badge>
+              )}
             </div>
-            <h1 className="text-2xl font-bold text-foreground">{chapter.title}</h1>
+            <h1 className="text-2xl font-bold text-foreground">{lesson?.title || chapter.title}</h1>
           </div>
           <div className="flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-muted-foreground" />
@@ -174,23 +109,31 @@ while (condition) {
             </CardHeader>
             <CardContent>
               <div className="prose prose-slate dark:prose-invert max-w-none">
-                <div
-                  className="whitespace-pre-wrap"
-                  dangerouslySetInnerHTML={{
-                    __html: content
-                      .replace(
-                        /```cpp\n([\s\S]*?)\n```/g,
-                        '<pre class="bg-muted p-4 rounded-lg overflow-x-auto"><code class="language-cpp">$1</code></pre>',
-                      )
-                      .replace(/`([^`]+)`/g, '<code class="bg-muted px-1 py-0.5 rounded text-sm">$1</code>')
-                      .replace(/^# (.*$)/gm, '<h1 class="text-2xl font-bold mb-4">$1</h1>')
-                      .replace(/^## (.*$)/gm, '<h2 class="text-xl font-semibold mb-3 mt-6">$1</h2>')
-                      .replace(/^### (.*$)/gm, '<h3 class="text-lg font-medium mb-2 mt-4">$1</h3>'),
-                  }}
-                />
+                {lesson?.content_mdx ? (
+                  <div
+                    className="whitespace-pre-wrap leading-relaxed"
+                    dangerouslySetInnerHTML={{
+                      __html: renderMarkdown(lesson.content_mdx),
+                    }}
+                  />
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Nội dung bài học đang được cập nhật...</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
+
+          {onMarkCompleted && !isCompleted && (
+            <div className="mt-6 text-center">
+              <Button onClick={onMarkCompleted} className="bg-green-600 hover:bg-green-700">
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Đánh dấu hoàn thành
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -204,13 +147,13 @@ while (condition) {
             className="flex items-center gap-2 bg-transparent"
           >
             <ChevronLeft className="h-4 w-4" />
-            Chương trước
+            Bài trước
           </Button>
 
-          <div className="text-sm text-muted-foreground">Chương {chapter.id} / 8</div>
+          <div className="text-sm text-muted-foreground">Bài {chapter.id}</div>
 
           <Button onClick={onNext} disabled={!canGoNext} className="flex items-center gap-2">
-            Chương tiếp theo
+            Bài tiếp theo
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
